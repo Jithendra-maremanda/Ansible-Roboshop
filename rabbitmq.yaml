@@ -1,77 +1,30 @@
----
-###############################################################################
-# PLAY 1 – Bootstrap the controller
-# Installs the required collection only if it is missing.
-###############################################################################
-- name: Ensure community.rabbitmq collection is present on the control node
-  hosts: localhost
-  connection: local          # run on the machine where Ansible is executed
-  gather_facts: no
-  run_once: true
-
-  tasks:
-    - name: Check if the collection is already installed
-      ansible.builtin.command:
-        cmd: ansible-galaxy collection list community.rabbitmq
-      register: collection_check
-      ignore_errors: yes
-      changed_when: false
-
-    - name: Install the community.rabbitmq collection when missing
-      ansible.builtin.command:
-        cmd: ansible-galaxy collection install community.rabbitmq
-      when: collection_check.rc != 0     # run only if the previous command failed
-      changed_when: true
-
-###############################################################################
-# PLAY 2 – Configure RabbitMQ on target hosts
-###############################################################################
-- name: Set up the RabbitMQ component
-  hosts: rabbitmq            # inventory group that contains your RabbitMQ host(s)
+- name: setup rabbitmq component
   become: yes
-
+  hosts: rabbitmq
   tasks:
-    - name: Copy RabbitMQ repository file
-      ansible.builtin.copy:
-        src: rabbitmq.repo
-        dest: /etc/yum.repos.d/rabbitmq.repo
+  - name: copy rabbitmq repo
+    ansible.builtin.copy:
+      src: rabbitmq.repo
+      dest: /etc/yum.repos.d/rabbitmq.repo
 
-    - name: Install rabbitmq‑server
-      ansible.builtin.dnf:
-        name: rabbitmq-server
-        state: installed
+  - name: install rabbitmq-server
+    ansible.builtin.dnf:
+      name: rabbitmq-server
+      state: installed
+  
+  - name: enable and start rabbitmq
+    ansible.builtin.service:
+      name: rabbitmq-server
+      state: started
+      enabled: yes
 
-    - name: Enable and start rabbitmq‑server
-      ansible.builtin.service:
-        name: rabbitmq-server
-        state: started
-        enabled: yes
-
-    - name: Enable RabbitMQ management plugin
-      ansible.builtin.command: rabbitmq-plugins enable rabbitmq_management
-      register: plugin_result
-      notify: Restart RabbitMQ if plugins changed
-      changed_when: "'enabled' in plugin_result.stdout"
-
-    - name: Wait until RabbitMQ is listening
-      ansible.builtin.wait_for:
-        port: 5672
-        delay: 3
-        timeout: 30
-
-    - name: Create RabbitMQ user “roboshop”
-      community.rabbitmq.rabbitmq_user:
-        user: roboshop
-        password: roboshop123
-        state: present
-        permissions:
-          - vhost: /
-            configure_priv: .*
-            read_priv: .*
-            write_priv: .*
-
-  handlers:
-    - name: Restart RabbitMQ if plugins changed
-      ansible.builtin.service:
-        name: rabbitmq-server
-        state: restarted
+  - name: create rabbitmq user
+    community.rabbitmq.rabbitmq_user:
+      user: roboshop
+      password: roboshop123
+      permissions:
+        - vhost: /
+          configure_priv: .*
+          read_priv: .*
+          write_priv: .*
+      state: present
