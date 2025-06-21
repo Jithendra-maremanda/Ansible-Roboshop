@@ -1,55 +1,63 @@
-- name: configure frontend component
+- name: Configure frontend component
   hosts: frontend
   become: yes
+
   tasks:
-    - name: disable default nginx module
+    - name: Disable default nginx module
       ansible.builtin.command: dnf module disable nginx -y
 
-    - name: enable nginx 1.24 module
+    - name: Enable nginx 1.24 module
       ansible.builtin.command: dnf module enable nginx:1.24 -y
 
-    - name: install nginx
+    - name: Install nginx
       ansible.builtin.dnf:
         name: nginx
         state: present
 
-    - name: remove default nginx html directory
+    - name: Ensure nginx system user exists
+      ansible.builtin.user:
+        name: nginx
+        system: yes
+        shell: /sbin/nologin
+        create_home: no
+
+    - name: Remove default nginx html directory
       ansible.builtin.file:
         path: /usr/share/nginx/html
         state: absent
 
-    - name: create html directory
+    - name: Create html directory
       ansible.builtin.file:
         path: /usr/share/nginx/html
         state: directory
 
-    - name: download frontend code
+    - name: Download frontend code
       ansible.builtin.get_url:
         url: https://roboshop-artifacts.s3.amazonaws.com/frontend-v3.zip
         dest: /tmp/frontend.zip
 
-    - name: unzip frontend code
+    - name: Unzip frontend code
       ansible.builtin.unarchive:
         src: /tmp/frontend.zip
         dest: /usr/share/nginx/html
         remote_src: yes
 
-    - name: remove default nginx config
+    - name: Remove default nginx config
       ansible.builtin.file:
         path: /etc/nginx/nginx.conf
         state: absent
 
-    - name: copy roboshop nginx config
+    - name: Copy Roboshop nginx config
       ansible.builtin.copy:
         src: nginx.conf
         dest: /etc/nginx/nginx.conf
 
-    - name: validate nginx config
+    - name: Validate nginx config
       ansible.builtin.command: nginx -t
       register: nginx_check
       failed_when: nginx_check.rc != 0
 
-    - name: start and enable nginx
+    - name: Start and enable nginx
       ansible.builtin.service:
         name: nginx
         state: started
